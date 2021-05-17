@@ -70,10 +70,21 @@ class shopItem:
         add_to_cart_button=driver.find_element_by_xpath('//button[normalize-space()="Add to Cart"]')
         add_to_cart_button.click()
 
+
+def is_positive_integer(testString):
+    try:
+        int_testString=int(testString)
+        if(int_testString >= 0):
+            return True
+        else:
+            return False
+    except:
+        return False
+
 def remove_zero_rows(itemList):
     outputList=[]
     for i in range(len(itemList)):
-        if(itemList[i][1] == "0" and itemList[i][0] == ""):
+        if(itemList[i][1] == "0" and not is_positive_integer(itemList[i][0])):
             pass
         else:
             outputList.append(itemList[i])
@@ -184,4 +195,6 @@ if __name__ == "__main__":
         except:
             print(f"Could not find {itemToAdd.name}, please verify URL: {itemToAdd.url}")
 
+    print("――――――――――――――――――――――――――")
     print(f"Expected Subtotal: ${round(subtotal,2)}")
+    print("――――――――――――――――――――――――――")
