@@ -2,6 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.support.select import Select
 import time
 import gspread
+import operator
 
 russos_base_url="https://russos.com/collections/collection-of-products/products/"
 secret_path="../secrets/russos.json"
@@ -69,9 +70,67 @@ class shopItem:
         add_to_cart_button=driver.find_element_by_xpath('//button[normalize-space()="Add to Cart"]')
         add_to_cart_button.click()
 
+def remove_zero_rows(itemList):
+    outputList=[]
+    for i in range(len(itemList)):
+        if(itemList[i][1] == "0" and itemList[i][0] == ""):
+            pass
+        else:
+            outputList.append(itemList[i])
+    return outputList
+
+def add_sort_column(itemList):
+    i=0
+    for item in itemList:
+       item.append(i)
+       i+=1
+    return itemList
+
+def remove_sort_column(itemList):
+    for item in itemList:
+        item.pop()
+    return itemList
+
+def create_sorted_list(itemList,sortIndex):
+    sorted_list = sorted(itemList,key=operator.itemgetter(sortIndex))
+    return sorted_list
+
+def remove_duplicates(itemList,sortIndex):
+    i=0
+    listLength=len(itemList)
+    while i < listLength-1:
+        #print(i)
+        if(itemList[i][sortIndex] == itemList[i+1][sortIndex]):
+            try:
+                int_override=int(itemList[i][0])
+                if(int_override >= 0):
+                    itemList[i][1]=int_override
+                    itemList[i][0]=""
+            except:
+                pass
+            try:
+                int_override=int(itemList[i+1][0])
+                if(int_override >= 0):
+                    itemList[i+1][1]=int_override
+                    itemList[i+1][0]=""
+            except:
+                pass
+
+            mergedItem=["",str(int(itemList[i][1])+int(itemList[i+1][1])),itemList[i][2],itemList[i][3],itemList[i][4],itemList[i][5],itemList[i][6]]
+            del itemList[i]
+            del itemList[i]
+            itemList.insert(i,mergedItem)
+            listLength-=1
+        else:
+            i+=1
+    return itemList
+
+
+
 if __name__ == "__main__":
 
 
+    # STEP 1: Get Shopping Lists from Russo's Google Docs
     globalShoppingList=[]
     subtotal=0
 
@@ -82,19 +141,23 @@ if __name__ == "__main__":
     print(f"Shopping from Lists: {[x for x in mainShoppingList.include]}")
 
     for shoppingList in mainShoppingList.include:
-        itemList = shopList(secret_path,"Russos",shoppingList)
-        itemList.remove_headers()
-        for item in itemList.list:
+        myitemList = shopList(secret_path,"Russos",shoppingList)
+        myitemList.remove_headers()
+        for item in myitemList.list:
             globalShoppingList.append(item)
 
+    # STEP 2: Clean up list (consolidate duplicate items together)
+    nonZeroShoppingList = remove_zero_rows(globalShoppingList)
+    indexedShoppingList = add_sort_column(nonZeroShoppingList)
+    sortedShoppingList = create_sorted_list(indexedShoppingList,5)
+    dedupedShoppingList = remove_duplicates(sortedShoppingList,5)
+    rearrangedShoppingList = create_sorted_list(dedupedShoppingList,6)
+    finalShoppingList = remove_sort_column(rearrangedShoppingList)
 
 
-   # TO DO: CONSOLIDATE ITEMS: 2 BANANAS. 
-
-
-
+    # STEP 3: Fill up shopping cart at russos.com
     driver = webdriver.Chrome()
-    for item in globalShoppingList:
+    for item in finalShoppingList:
         itemToAdd=shopItem(item[0],item[1],item[2],item[3],item[4],item[5])
         itemToAdd.decide_if_override()
         itemToAdd.decide_if_shop()
@@ -113,10 +176,12 @@ if __name__ == "__main__":
                     pass
                 cost_for_item=float(itemToAdd.amount)*float(itemToAdd.cost_per_unit)
                 subtotal = subtotal + cost_for_item
-                print(f"Added {itemToAdd.amount} {itemToAdd.unit} of {itemToAdd.name} to Shopping Cart | ${cost_for_item}")
-            else:
+                print(f"Added {itemToAdd.amount} {itemToAdd.unit} of {itemToAdd.name} with unit prize of ${round(float(itemToAdd.cost_per_unit),2)} to Shopping Cart | ${round(cost_for_item,2)}")
+            elif(item[1]!='0'):
                 print(f"Skipping {item[2]} in this order")
+            else:
+                pass
         except:
             print(f"Could not find {itemToAdd.name}, please verify URL: {itemToAdd.url}")
 
-    print(f"Expected Subtotal: ${subtotal}")
+    print(f"Expected Subtotal: ${round(subtotal,2)}")
